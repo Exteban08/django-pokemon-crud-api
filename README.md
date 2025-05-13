@@ -23,7 +23,7 @@ A Django REST API for managing Pokemon data with full CRUD operations.
 
 1. Clone the repository:
    ```
-   git clone https://github.com/YOUR_USERNAME/django-pokemon-crud-api.git
+   git clone https://github.com/Exteban08/django-pokemon-crud-api.git
    cd django-pokemon-crud-api
    ```
 
