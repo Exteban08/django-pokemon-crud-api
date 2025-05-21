@@ -33,7 +33,7 @@ A Django REST API for managing Pokemon data with full CRUD operations.
 2. Create and activate a virtual environment:
    ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows:
+   source venv/bin/activate
    venv\Scripts\activate
 
 3. Install dependencies:
@@ -47,7 +47,6 @@ A Django REST API for managing Pokemon data with full CRUD operations.
 5. Start the development server:
    ```bash
    python manage.py runserver
-
 
 ### Technologies Used
 - Python
