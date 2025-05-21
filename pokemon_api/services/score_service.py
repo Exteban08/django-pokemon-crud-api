@@ -33,10 +33,10 @@ class ScoreService:
         return min(base_score, 100)
 
     def _calculate_stats_score(self, base_stats) -> float:
-        if not isinstance(base_stats, list):
-            raise ValueError("base_stats must be a list")
+        if not isinstance(base_stats, list) or not all(isinstance(stat, int) for stat in base_stats):
+            raise ValueError("base_stats must be a list of integers")
 
-        total_stats = sum(stat['value'] for stat in base_stats if 'value' in stat)
+        total_stats = sum(base_stats)
         return total_stats
 
     def _calculate_abilities_score(self, abilities: List[str]) -> float:

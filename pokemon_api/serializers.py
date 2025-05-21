@@ -4,11 +4,10 @@ from .models import Pokemon
 
 
 class PokemonSerializer(serializers.ModelSerializer):
-    pokemon_id = serializers.IntegerField(read_only=True)
-    name = serializers.CharField(read_only=True)
-    created_at = serializers.DateTimeField(read_only=True)
-    updated_at = serializers.DateTimeField(read_only=True)
-
     class Meta:
         model = Pokemon
-        fields = '__all__'
+        fields = [
+            'id', 'created_at', 'updated_at', 'name', 'pokemon_id',
+            'types', 'abilities', 'base_stats', 'height', 'weight', 'sprite_url'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

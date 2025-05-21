@@ -1,10 +1,8 @@
 import logging
 
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
-from rest_framework.generics import RetrieveAPIView, CreateAPIView, UpdateAPIView, DestroyAPIView, ListAPIView
+from rest_framework.generics import RetrieveAPIView, GenericAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,127 +14,92 @@ from .services.score_service import ScoreService
 logger = logging.getLogger(__name__)
 
 
-class PokemonViewSet(RetrieveAPIView):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.service = PokemonApiService()
+class PokemonApiView(RetrieveAPIView):
+    def retrieve(self, request, *args, **kwargs):
+        pokemon_name = request.query_params.get('name')
+        service = PokemonApiService()
 
-    def get(self, request, name):
         try:
-            logger.info(f"Fetching Pokemon details for: {name}")
-            pokemon_details = self.service.get_pokemon_details(pokemon_name=name)
+            pokemon_details = service.get_pokemon_details(pokemon_name=pokemon_name)
 
             if not pokemon_details:
-                logger.warning(f"Pokemon not found: {name}")
                 return Response({"error": "Pokemon not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            return JsonResponse(pokemon_details, safe=False)
+            formatted_data = service.format_pokemon_data(pokemon_details)
+            return Response(formatted_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"Error fetching Pokemon data: {e}", exc_info=True)
+            logger.error(f"Error fetching Pokemon data: {e}")
             return Response({"error": "An error occurred while fetching Pokemon data"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class PokemonCreateView(CreateAPIView):
-    serializer_class = PokemonSerializer
-
-    def perform_create(self, serializer):
-        name = self.request.data.get('name')
-
-        if not name:
-            raise ValidationError({"error": "The 'name' field is required."})
-
-        if Pokemon.objects.filter(name=name).exists():
-            raise ValidationError({"error": f"Pokemon with name '{name}' already exists."})
-
-        service = PokemonApiService()
-        pokemon_data = service.get_pokemon_details(name)
-
-        if not pokemon_data:
-            raise ValidationError({"error": f"Pokemon with name '{name}' not found."})
-
-        serializer.save(
-            pokemon_id=pokemon_data.get('id'),
-            name=pokemon_data.get('name'),
-            types=pokemon_data.get('types'),
-            abilities=pokemon_data.get('abilities'),
-            base_stats=pokemon_data.get('stats'),
-            height=pokemon_data.get('height'),
-            weight=pokemon_data.get('weight'),
-            image_url=pokemon_data.get('sprites', {}).get('other', {}).get('official-artwork', {}).get('front_default'),
-        )
-
-
-class PokemonUpdateView(UpdateAPIView):
+class PokemonManagementView(GenericAPIView):
     serializer_class = PokemonSerializer
     queryset = Pokemon.objects.all()
+    lookup_field = "id"
 
-    def get_object(self):
-        name = self.kwargs.get('name')
-        return get_object_or_404(Pokemon, name=name)
+    def get(self, request, id=None):
+        name = request.query_params.get('name')
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
+        if id:
+            pokemon = get_object_or_404(self.get_queryset(), id=id)
+            serializer = self.get_serializer(pokemon)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        elif name:
+            pokemon = get_object_or_404(self.get_queryset(), name=name)
+            serializer = self.get_serializer(pokemon)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            pokemons = self.get_queryset()
+            serializer = self.get_serializer(pokemons, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
-        non_modifiable_fields = ['pokemon_id', 'name', 'created_at', 'updated_at']
-        data = {key: value for key, value in request.data.items() if key not in non_modifiable_fields}
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if not data:
-            return Response({"error": "It's not an updatable field."}, status=status.HTTP_400_BAD_REQUEST)
+    def patch(self, request, id=None):
+        pokemon = get_object_or_404(self.get_queryset(), id=id)
+        serializer = self.get_serializer(pokemon, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = self.get_serializer(instance, data=data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-
-        return Response(data=serializer.data)
-
-
-class PokemonDeleteView(DestroyAPIView):
-    queryset = Pokemon.objects.all()
-
-    def get_object(self):
-        name = self.kwargs.get('name')
-        return get_object_or_404(Pokemon, name=name)
-
-    def delete(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
-        return Response({"message": f"Pokemon '{instance.name}' deleted successfully."}, status=status.HTTP_200_OK)
-
-
-class PokemonRetrieveView(RetrieveAPIView):
-    serializer_class = PokemonSerializer
-    queryset = Pokemon.objects.all()
-
-    def get_object(self):
-        name = self.kwargs.get('name')
-        return get_object_or_404(Pokemon, name=name)
-
-
-class PokemonListView(ListAPIView):
-    serializer_class = PokemonSerializer
-    queryset = Pokemon.objects.all()
+    def delete(self, request, id=None):
+        pokemon = get_object_or_404(self.get_queryset(), id=id)
+        pokemon.delete()
+        return Response({"message": f"Pokemon with id '{id}' deleted successfully."}, status=status.HTTP_200_OK)
 
 
 class PokemonScoreView(APIView):
-    def get(self, request):
-        score_service = ScoreService()
-        pokemons = Pokemon.objects.all()
-        scores = []
-        for pokemon in pokemons:
+    score_service = ScoreService()
+
+    def get(self, request, id=None):
+        try:
+            pokemon = get_object_or_404(Pokemon, id=id)
+
+            base_stats_list = list(pokemon.base_stats.values())
             pokemon_data = {
                 'types': pokemon.types,
-                'base_stats': pokemon.base_stats,
+                'base_stats': base_stats_list,
                 'abilities': pokemon.abilities,
                 'height': pokemon.height,
                 'weight': pokemon.weight,
             }
-            score = score_service.calculate_score(pokemon_data)
-            scores.append({
+
+            score = self.score_service.calculate_score(pokemon_data)
+
+            return Response({
                 'name': pokemon.name,
                 'score': score
-            })
+            }, status=status.HTTP_200_OK)
 
-        return Response(scores, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error calculating score: {e}")
+            return Response({"error": "An error occurred while calculating the score."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
